@@ -1,0 +1,48 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "https://marketplace.visualstudio.com/items?itemName=pomdtr.excalidraw-editor",
+  "elements": [
+    {
+      "id": "0jcM9LsKDorsLLHiT0lKT",
+      "type": "text",
+      "x": 272.890625,
+      "y": 118.2890625,
+      "width": 487.39959716796875,
+      "height": 175,
+      "angle": 0,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [],
+      "frameId": null,
+      "roundness": null,
+      "seed": 2087820470,
+      "version": 155,
+      "versionNonce": 521157930,
+      "isDeleted": false,
+      "boundElements": null,
+      "updated": 1720768671841,
+      "link": null,
+      "locked": false,
+      "text": "Accounts needed for the NFT mint, vault, escrow\n\n1. Initialize vault\n2. Exchange or Vault\n3. Cancel Vault\n4. Escrow Account\n5. ",
+      "fontSize": 20,
+      "fontFamily": 1,
+      "textAlign": "left",
+      "verticalAlign": "top",
+      "baseline": 168,
+      "containerId": null,
+      "originalText": "Accounts needed for the NFT mint, vault, escrow\n\n1. Initialize vault\n2. Exchange or Vault\n3. Cancel Vault\n4. Escrow Account\n5. ",
+      "lineHeight": 1.25
+    }
+  ],
+  "appState": {
+    "gridSize": null,
+    "viewBackgroundColor": "#ffffff"
+  },
+  "files": {}
+}
