@@ -1,8 +1,6 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, SetAuthority, Token, TokenAccount, Transfer};
+use anchor_spl::token::{self, Mint, MintTo, SetAuthority, Token, TokenAccount, Transfer};
 use spl_token::instruction::AuthorityType;
-
-use anchor_spl::token::{Mint, MintTo};
 
 declare_id!("acVeuAwGRVKa4i3aTurgynaYQGER9BieHbXTVwdRAWX");
 
@@ -23,6 +21,7 @@ pub enum ErrorCode {
 #[program]
 pub mod whitelist_sale {
     use super::*;
+    use crate::instruction::StartSale;
 
     // Initialize the whitelist sale
     pub fn initialize_sale(
@@ -192,14 +191,17 @@ pub mod whitelist_sale {
         let cpi_accounts = Transfer {
             from: ctx.accounts.vault.to_account_info().clone(),
             to: ctx.accounts.admin.to_account_info().clone(),
-            authority: ctx.accounts.whitelist_sale_account.to_account_info().clone(),
+            authority: ctx
+                .accounts
+                .whitelist_sale_account
+                .to_account_info()
+                .clone(),
         };
         let cpi_program = ctx.accounts.token_program.to_account_info();
         token::transfer(CpiContext::new(cpi_program, cpi_accounts), amount)?;
 
         Ok(())
     }
-}
 }
 
 #[derive(Accounts)]
@@ -218,9 +220,9 @@ pub struct Purchase<'info> {
     #[account(mut)]
     pub whitelist_sale_account: Account<'info, WhitelistSaleAccount>,
     #[account(mut)]
-    pub vault: Box<Account<'info, TokenAccount>>,
+    pub vault: Account<'info, TokenAccount>,
     #[account(mut)]
-    pub mint: Account<'info, Mint>,
+    pub mint: Account<'info, TokenAccount>,
     #[account(mut)]
     pub buyer_token_account: Account<'info, TokenAccount>,
     #[account(signer)]
@@ -293,6 +295,6 @@ pub struct WithdrawFunds<'info> {
     #[account(mut)]
     pub whitelist_sale_account: Account<'info, WhitelistSaleAccount>,
     #[account(mut)]
-    pub vault: Box<Account<'info, TokenAccount>>,
+    pub vault: Account<'info, TokenAccount>,
     pub token_program: Program<'info, Token>,
 }
