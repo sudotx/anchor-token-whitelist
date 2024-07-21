@@ -2,6 +2,8 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{self, SetAuthority, Token, TokenAccount, Transfer};
 use spl_token::instruction::AuthorityType;
 
+use anchor_spl::token::{Mint, MintTo};
+
 declare_id!("acVeuAwGRVKa4i3aTurgynaYQGER9BieHbXTVwdRAWX");
 
 const MAX_WHITELIST_SIZE: usize = 1000;
@@ -30,22 +32,17 @@ pub mod whitelist_sale {
     ) -> Result<()> {
         let whitelist_sale_account = &mut ctx.accounts.whitelist_sale_account;
         whitelist_sale_account.admin = ctx.accounts.initializer.key();
-        // set token price
         whitelist_sale_account.token_price = token_price;
         whitelist_sale_account.purchase_limit = purchase_limit;
         whitelist_sale_account.is_active = false;
-        // only owner allowed to update prices
-        // set a purchase limit per wallet
-        // set up token
+        whitelist_sale_account.total_tokens_sold = 0;
+        whitelist_sale_account.whitelist = vec![];
 
-        // set purchase limit
-        // initializing the whitelist
         Ok(())
     }
 
     // Allow a whitelisted user to purchase tokens, ensuring they do not exceed the purchase limit.
     pub fn purchase_tokens(ctx: Context<Purchase>, amount: u64) -> Result<()> {
-        // check if user exists in the merkle root
         let whitelist_sale_account = &ctx.accounts.whitelist_sale_account;
 
         require!(whitelist_sale_account.is_active, ErrorCode::SaleNotActive);
@@ -61,18 +58,35 @@ pub mod whitelist_sale {
             .ok_or(ErrorCode::NumericalOverflow)?;
 
         // Transfer SOL from buyer to vault
-        // This is a simplified version, you'll need to implement the actual transfer
-        // using the System Program
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.buyer.to_account_info().clone(),
+            to: ctx.accounts.vault.to_account_info().clone(),
+            authority: ctx.accounts.buyer.to_account_info().clone(),
+        };
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        token::transfer(CpiContext::new(cpi_program, cpi_accounts), total_cost)?;
 
         // Mint tokens to user
-        // You'll need to implement token minting logic here
+        let cpi_accounts_mint = MintTo {
+            mint: ctx.accounts.mint.to_account_info().clone(),
+            to: ctx.accounts.buyer_token_account.to_account_info().clone(),
+            authority: ctx.accounts.mint_authority.clone(),
+        };
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        token::mint_to(CpiContext::new(cpi_program, cpi_accounts_mint), amount)?;
 
-        // require!(whitelist_sale_account.is_active, ErrorCode::SaleNotActive);
-        // send sol to vault
-        // sol has to be up to the
-        // mint tokens to user
+        // Ensure they do not surpass the purchase limit
+        let new_total = whitelist_sale_account
+            .total_tokens_sold
+            .checked_add(amount)
+            .ok_or(ErrorCode::NumericalOverflow)?;
 
-        // ensure they dont surpass purchase limit
+        require!(
+            new_total <= whitelist_sale_account.purchase_limit,
+            ErrorCode::NumericalOverflow
+        );
+
+        whitelist_sale_account.total_tokens_sold = new_total;
 
         Ok(())
     }
@@ -93,8 +107,6 @@ pub mod whitelist_sale {
             whitelist_sale_account.whitelist.push(whitelist_address);
         }
 
-        // only admin allowed here
-        // add a user to the whitelist
         Ok(())
     }
 
@@ -112,55 +124,64 @@ pub mod whitelist_sale {
         whitelist_sale_account
             .whitelist
             .retain(|&address| address != whitelist_address);
-        // only admin allowed here
-        // add a user to the whitelist
+
         Ok(())
     }
     // Allow anyone to check if an address is whitelisted.
     pub fn check_whitelist_status(
-        ctx: Context<AddToWhitelist>,
+        ctx: Context<CheckWhitelistStatus>,
         whitelist_address: Pubkey,
-    ) -> Result<()> {
-        // only admin allowed here
-        // add a user to the whitelist
-        Ok(())
+    ) -> Result<bool> {
+        let whitelist_sale_account = &ctx.accounts.whitelist_sale_account;
+        Ok(whitelist_sale_account
+            .whitelist
+            .contains(&whitelist_address))
     }
 
     // Allow the admin to update parameters of the sale, such as the token price or purchase limit.
     pub fn update_sale_parameters(
-        ctx: Context<AddToWhitelist>,
+        ctx: Context<UpdateSaleParameters>,
         token_price: u64,
         purchase_limit: u64,
     ) -> Result<()> {
-        // only admin allowed here
+        let whitelist_sale_account = &mut ctx.accounts.whitelist_sale_account;
+        require!(
+            ctx.accounts.admin.key() == whitelist_sale_account.admin,
+            ErrorCode::Unauthorized
+        );
 
-        // set token price and purchase limit
+        whitelist_sale_account.token_price = token_price;
+        whitelist_sale_account.purchase_limit = purchase_limit;
+
         Ok(())
     }
     // end sale period, preventing purchases
-    pub fn end_sale(ctx: Context<AddToWhitelist>) -> Result<()> {
+    pub fn end_sale(ctx: Context<EndSale>) -> Result<()> {
         let whitelist_sale_account = &mut ctx.accounts.whitelist_sale_account;
         require!(
             ctx.accounts.admin.key() == whitelist_sale_account.admin,
             ErrorCode::Unauthorized
         );
-        // only admin allowed here
-        // end the sale
+
+        whitelist_sale_account.is_active = false;
+
         Ok(())
     }
+
     // start sale period
-    pub fn start_sale(ctx: Context<AddToWhitelist>) -> Result<()> {
+    pub fn start_sale(ctx: Context<StartSale>) -> Result<()> {
         let whitelist_sale_account = &mut ctx.accounts.whitelist_sale_account;
         require!(
             ctx.accounts.admin.key() == whitelist_sale_account.admin,
             ErrorCode::Unauthorized
         );
-        // only admin allowed here
-        // end the sale
+
+        whitelist_sale_account.is_active = true;
+
         Ok(())
     }
     // withdraw funds from the sale
-    pub fn withdraw_funds(ctx: Context<AddToWhitelist>, amount: u64) -> Result<()> {
+    pub fn withdraw_funds(ctx: Context<WithdrawFunds>, amount: u64) -> Result<()> {
         let whitelist_sale_account = &ctx.accounts.whitelist_sale_account;
         require!(
             ctx.accounts.admin.key() == whitelist_sale_account.admin,
@@ -168,11 +189,17 @@ pub mod whitelist_sale {
         );
 
         // Implement the logic to transfer funds from the vault to the admin
-        // This will involve using the System Program to transfer SOL
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.vault.to_account_info().clone(),
+            to: ctx.accounts.admin.to_account_info().clone(),
+            authority: ctx.accounts.whitelist_sale_account.to_account_info().clone(),
+        };
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        token::transfer(CpiContext::new(cpi_program, cpi_accounts), amount)?;
 
-        // allow admin to wtihdraw funds
         Ok(())
     }
+}
 }
 
 #[derive(Accounts)]
@@ -190,6 +217,14 @@ pub struct Purchase<'info> {
     pub buyer: Signer<'info>,
     #[account(mut)]
     pub whitelist_sale_account: Account<'info, WhitelistSaleAccount>,
+    #[account(mut)]
+    pub vault: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    pub mint: Account<'info, Mint>,
+    #[account(mut)]
+    pub buyer_token_account: Account<'info, TokenAccount>,
+    #[account(signer)]
+    pub mint_authority: AccountInfo<'info>,
     pub token_program: Program<'info, Token>,
 }
 
@@ -219,7 +254,7 @@ impl WhitelistSaleAccount {
         8 + // purchase_limit
         1 + // is_active
         8 + // total_tokens_sold
-        4 + (32 * Self::MAX_WHITELIST_SIZE); // whitelist vec
+        4 + (32 * Self::MAX_WHITELIST_SIZE);
 }
 
 #[derive(Accounts)]
@@ -258,6 +293,6 @@ pub struct WithdrawFunds<'info> {
     #[account(mut)]
     pub whitelist_sale_account: Account<'info, WhitelistSaleAccount>,
     #[account(mut)]
-    pub admin_token_account: Account<'info, TokenAccount>,
+    pub vault: Box<Account<'info, TokenAccount>>,
     pub token_program: Program<'info, Token>,
 }
